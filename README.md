@@ -42,6 +42,8 @@ Future<void> main() async {
 - 网络请求、序列化、签名与登录流程由后端实现。
 - 数据模型只保留界面需要的字段，协议冗余由实现方处理。
 - `testing.dart` 是独立入口，主入口不包含演示数据。
+- 演示用户头像为内置 PNG data URI；图片消费者需支持 `data:image/png;base64,`。
+  `resolveAvatarUrl` 原样保留该地址。帖子配图与吧头像使用网络地址。
 - 版本号遵循语义化版本。
 
 ## 许可证

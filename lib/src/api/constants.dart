@@ -10,13 +10,14 @@ const String AUTHOR_AVATAR = "http://tb.himg.baidu.com/sys/portrait/item/";
 
 /// 把 `portrait` 解析成可直接加载的头像地址。
 ///
-/// 已是绝对地址时原样返回，否则拼上 [AUTHOR_AVATAR]。
+/// 已是绝对地址或内置图片 data URI 时原样返回，否则拼上 [AUTHOR_AVATAR]。
 String resolveAvatarUrl(String portrait) {
   final String value = portrait.trim();
   if (value.isEmpty) {
     return '';
   }
   final Uri? uri = Uri.tryParse(value);
+  if (uri?.scheme == 'data') return value;
   if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
     return value;
   }

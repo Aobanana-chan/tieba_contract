@@ -10,6 +10,7 @@ import 'dart:math' as math;
 import '../../tieba_contract.dart';
 
 part 'demo_seed.dart';
+part 'demo_avatars.dart';
 
 /// 不联网的 [TiebaApi] 实现。
 ///
@@ -289,7 +290,7 @@ class DemoTiebaApi implements TiebaApi {
       uid: uid,
       username: 'tb_${uid.hashCode.abs()}',
       name: '贴吧用户_${salt % 9999}',
-      avatar: '$_avatarHost${1 + salt % 70}',
+      avatar: _demoAvatars[salt % _demoAvatars.length],
       intro: '',
       sex: salt.isEven ? 1 : 2,
       level: 1 + salt % 12,
@@ -825,7 +826,7 @@ class DemoTiebaApi implements TiebaApi {
     await _wait();
     _requireLogin();
     _profileAvatar =
-        '$_avatarHost${1 + _stableHash(image.resourceId) % 70}&v=${DateTime.now().millisecondsSinceEpoch}';
+        _demoAvatars[_stableHash(image.resourceId) % _demoAvatars.length];
     return TiebaAvatarUpdateResult(
       portraitUrl: _profileAvatar,
       message: '头像已更新',
