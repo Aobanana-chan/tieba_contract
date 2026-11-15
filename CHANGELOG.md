@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+- `TiebaImageContent.isAnimated`：根据 CDN 地址、`first_gif` 参数与原图大小识别动图。
+- `TiebaImageContent.originSize`：保留 `origin_size`，用于判断 `.jpg` 地址下的动图原图。
+- `resolveAvatarUrl` 支持内置图片的 `data:` URI，演示头像离线可显示。
+- 演示数据补充离线头像，不改变 `TiebaApi` 接口。
+
 ## 1.0.0
 
 首个版本。

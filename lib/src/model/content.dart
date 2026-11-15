@@ -189,6 +189,11 @@ class TiebaImageContent extends TiebaPostContent {
   ///动图经百度图片代理下发时可能带 `first_gif=1`，只返回第一帧。
   String? cdnSrcActive;
 
+  ///原图字节数（`origin_size`）。
+  ///
+  ///动图的原图包含多帧，文件通常远大于同尺寸静态图。
+  int? originSize;
+
   TiebaImageContent({
     this.bigCdnSrc,
     this.bsize,
@@ -197,6 +202,7 @@ class TiebaImageContent extends TiebaPostContent {
     this.cdnSrc,
     this.bigSrc,
     this.cdnSrcActive,
+    this.originSize,
     TiebaContentType? type,
   }) : super(type: type ?? TiebaContentType.image);
 
@@ -220,14 +226,33 @@ class TiebaImageContent extends TiebaPostContent {
   ///省流量档位下发的低质量地址可能只带第一帧，因此需要检查全部候选地址：
   ///百度图片代理只要有 `first_gif` 参数就说明源文件是 GIF，直接落盘的
   ///地址则看路径或代理 `src` 参数是否以 `.gif` 结尾。
-  bool get isAnimated => <String?>[
-        cdnSrcActive,
-        bigCdnSrc,
-        bigSrc,
-        cdnSrc,
-        src,
-        originSrc,
-      ].any((String? url) => url != null && _isAnimatedUrl(url));
+  ///
+  ///上传的 GIF 原图也可能挂在 `.jpg` 地址下，此时用原图字节数相对显示
+  ///像素数的大小兜底：动图含多帧，通常远大于同尺寸静态图。
+  bool get isAnimated {
+    if (<String?>[
+      cdnSrcActive,
+      bigCdnSrc,
+      bigSrc,
+      cdnSrc,
+      src,
+      originSrc,
+    ].any((String? url) => url != null && _isAnimatedUrl(url))) {
+      return true;
+    }
+    final int pixels = pixelCount;
+    final int size = originSize ?? 0;
+    return pixels > 0 && size > pixels * 3;
+  }
+
+  ///`bsize`（`"宽,高"`）对应的像素总数，缺失或非法时为 0。
+  int get pixelCount {
+    final List<String> parts = (bsize ?? '').split(',');
+    if (parts.length != 2) return 0;
+    final int width = int.tryParse(parts[0].trim()) ?? 0;
+    final int height = int.tryParse(parts[1].trim()) ?? 0;
+    return width > 0 && height > 0 ? width * height : 0;
+  }
 
   ///`bsize` 按 `"宽,高"` 拼接后的数值，缺失或非法时为 0。
   int get bsizeValue => int.tryParse((bsize ?? '').replaceAll(',', '')) ?? 0;
