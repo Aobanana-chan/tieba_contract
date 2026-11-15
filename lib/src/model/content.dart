@@ -184,7 +184,9 @@ class TiebaImageContent extends TiebaPostContent {
   ///大图（`big_src`）。
   String? bigSrc;
 
-  ///首楼 / 动图专用 CDN（`cdn_src_active`）。
+  ///首楼 / 信息流 CDN（`cdn_src_active`）。
+  ///
+  ///动图经百度图片代理下发时可能带 `first_gif=1`，只返回第一帧。
   String? cdnSrcActive;
 
   TiebaImageContent({
@@ -213,8 +215,31 @@ class TiebaImageContent extends TiebaPostContent {
   String get originalSrc =>
       _first([originSrc, bigCdnSrc, bigSrc, cdnSrc, src, cdnSrcActive]);
 
+  ///是否为动图。
+  ///
+  ///省流量档位下发的低质量地址可能只带第一帧，因此需要检查全部候选地址：
+  ///百度图片代理只要有 `first_gif` 参数就说明源文件是 GIF，直接落盘的
+  ///地址则看路径或代理 `src` 参数是否以 `.gif` 结尾。
+  bool get isAnimated => <String?>[
+        cdnSrcActive,
+        bigCdnSrc,
+        bigSrc,
+        cdnSrc,
+        src,
+        originSrc,
+      ].any((String? url) => url != null && _isAnimatedUrl(url));
+
   ///`bsize` 按 `"宽,高"` 拼接后的数值，缺失或非法时为 0。
   int get bsizeValue => int.tryParse((bsize ?? '').replaceAll(',', '')) ?? 0;
+
+  static bool _isAnimatedUrl(String url) {
+    final Uri? uri = Uri.tryParse(url);
+    if (uri == null) return false;
+    if (uri.queryParameters.containsKey('first_gif')) return true;
+    if (uri.path.toLowerCase().endsWith('.gif')) return true;
+    final String? source = uri.queryParameters['src'];
+    return source != null && source.toLowerCase().endsWith('.gif');
+  }
 
   static String _first(List<String?> candidates) {
     for (final String? candidate in candidates) {
