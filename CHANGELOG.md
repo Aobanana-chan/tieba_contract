@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+- `TiebaImageContent` 新增可选字段 `animated`，支持后端显式标记动图。
+- `isAnimated` 只使用显式标记和地址里的明确动图信号，不再用 `origin_size`
+  与像素数推断，避免高分辨率静态图误判。
+- `first_gif` 仅在值为 `1` / `true` 时算动图，`0` 和空值不算。
+- 新增 `TiebaImageContent.isAnimatedUrl`，供图片加载后的动图探测复用同一套地址判断。
+
 ## 1.1.0
 
 - `TiebaImageContent.isAnimated`：根据 CDN 地址、`first_gif` 参数与原图大小识别动图。

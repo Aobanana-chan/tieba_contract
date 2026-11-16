@@ -191,8 +191,13 @@ class TiebaImageContent extends TiebaPostContent {
 
   ///原图字节数（`origin_size`）。
   ///
-  ///动图的原图包含多帧，文件通常远大于同尺寸静态图。
+  ///不参与动图判断：`bsize` 不一定是原图尺寸，按体积阈值会误判静态大图。
   int? originSize;
+
+  ///是否为动图的显式标记。
+  ///
+  ///后端能确定时优先使用该值；`null` 表示未知，按地址中的明确标记推断。
+  bool? animated;
 
   TiebaImageContent({
     this.bigCdnSrc,
@@ -203,6 +208,7 @@ class TiebaImageContent extends TiebaPostContent {
     this.bigSrc,
     this.cdnSrcActive,
     this.originSize,
+    this.animated,
     TiebaContentType? type,
   }) : super(type: type ?? TiebaContentType.image);
 
@@ -223,26 +229,24 @@ class TiebaImageContent extends TiebaPostContent {
 
   ///是否为动图。
   ///
-  ///省流量档位下发的低质量地址可能只带第一帧，因此需要检查全部候选地址：
-  ///百度图片代理只要有 `first_gif` 参数就说明源文件是 GIF，直接落盘的
-  ///地址则看路径或代理 `src` 参数是否以 `.gif` 结尾。
+  ///优先使用显式标记 [animated]。没有显式标记时只根据地址中的明确信号判断：
+  ///百度图片代理 `first_gif=1` 说明源文件是 GIF；直接落盘的地址则看路径或
+  ///代理 `src` 参数是否以 `.gif` 结尾。
   ///
-  ///上传的 GIF 原图也可能挂在 `.jpg` 地址下，此时用原图字节数相对显示
-  ///像素数的大小兜底：动图含多帧，通常远大于同尺寸静态图。
+  ///不用 `origin_size` 与像素数推断：`bsize` 不一定是原图尺寸，高分辨率静态
+  ///照片、截图和长图很容易超过这个阈值。`.jpg` 地址下的真实动图由界面在
+  ///图片加载后读取文件头/响应头识别。
   bool get isAnimated {
-    if (<String?>[
+    final bool? explicit = animated;
+    if (explicit != null) return explicit;
+    return <String?>[
       cdnSrcActive,
       bigCdnSrc,
       bigSrc,
       cdnSrc,
       src,
       originSrc,
-    ].any((String? url) => url != null && _isAnimatedUrl(url))) {
-      return true;
-    }
-    final int pixels = pixelCount;
-    final int size = originSize ?? 0;
-    return pixels > 0 && size > pixels * 3;
+    ].any(isAnimatedUrl);
   }
 
   ///`bsize`（`"宽,高"`）对应的像素总数，缺失或非法时为 0。
@@ -257,13 +261,27 @@ class TiebaImageContent extends TiebaPostContent {
   ///`bsize` 按 `"宽,高"` 拼接后的数值，缺失或非法时为 0。
   int get bsizeValue => int.tryParse((bsize ?? '').replaceAll(',', '')) ?? 0;
 
-  static bool _isAnimatedUrl(String url) {
+  ///地址本身是否带有明确的动图标记。
+  ///
+  ///只认 `first_gif=1` / `first_gif=true`、`.gif` 路径和代理 `src` 参数中的
+  ///`.gif`；`first_gif=0` 或空值不算动图。
+  static bool isAnimatedUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
     final Uri? uri = Uri.tryParse(url);
     if (uri == null) return false;
-    if (uri.queryParameters.containsKey('first_gif')) return true;
-    if (uri.path.toLowerCase().endsWith('.gif')) return true;
+    final String? firstGif =
+        uri.queryParameters['first_gif']?.trim().toLowerCase();
+    if (firstGif == '1' || firstGif == 'true') return true;
+    if (_hasGifPath(uri.path)) return true;
     final String? source = uri.queryParameters['src'];
-    return source != null && source.toLowerCase().endsWith('.gif');
+    if (source == null) return false;
+    final Uri? sourceUri = Uri.tryParse(source);
+    return _hasGifPath(sourceUri?.path ?? source);
+  }
+
+  static bool _hasGifPath(String path) {
+    final String value = path.split('?').first.trim().toLowerCase();
+    return value.endsWith('.gif');
   }
 
   static String _first(List<String?> candidates) {
@@ -350,8 +368,7 @@ class TiebaLinkContent extends TiebaPostContent {
 class TiebaPhoneContent extends TiebaPostContent {
   String text;
 
-  TiebaPhoneContent({required this.text})
-      : super(type: TiebaContentType.phone);
+  TiebaPhoneContent({required this.text}) : super(type: TiebaContentType.phone);
 }
 
 /// 语音。
