@@ -8,12 +8,14 @@ library;
 export 'src/api/constants.dart';
 export 'src/api/exceptions.dart';
 export 'src/api/tieba_api.dart';
+export 'src/api/tieba_chat_api.dart';
 export 'src/api/tieba_api_host.dart';
 export 'src/api/value_types.dart';
 export 'src/api/thread_publish.dart';
 export 'src/api/moderation.dart';
 
 export 'src/model/author.dart';
+export 'src/model/chat.dart';
 export 'src/model/common.dart';
 export 'src/model/content.dart';
 export 'src/model/floor.dart';

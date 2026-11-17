@@ -7,6 +7,12 @@
   与像素数推断，避免高分辨率静态图误判。
 - `first_gif` 仅在值为 `1` / `true` 时算动图，`0` 和空值不算。
 - 新增 `TiebaImageContent.isAnimatedUrl`，供图片加载后的动图探测复用同一套地址判断。
+- 新增私信模型：`TiebaConversation`、`TiebaChatMessage`、`ChatMessagePage`、
+  `ChatDraft`、`ChatSendResult`、`ChatBlockInfo` 与 `ChatMaskSettings`。
+- 新增可选接口 `TiebaChatApi`，覆盖会话、消息分页、发送、未读、已读与
+  IM 免打扰/屏蔽；不改变 `TiebaApi` 的抽象成员。
+- `DemoTiebaApi` 同时实现 `TiebaChatApi`，提供可交互的内存会话、发送失败重试、
+  未读与已读状态。
 
 ## 1.1.0
 

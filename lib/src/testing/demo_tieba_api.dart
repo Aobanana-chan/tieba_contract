@@ -11,12 +11,16 @@ import '../../tieba_contract.dart';
 
 part 'demo_seed.dart';
 part 'demo_avatars.dart';
+part 'demo_chat.dart';
 
 /// 不联网的 [TiebaApi] 实现。
 ///
 /// [loggedIn] 控制初始登录态；接上 [TiebaApiHost] 的回调后，可接收签到、
 /// 回复等操作的通知。
-class DemoTiebaApi implements TiebaApi {
+///
+/// 同时实现可选的 [TiebaChatApi]，用内存状态机演示私信会话、发送、
+/// 未读与已读，不模拟真实 socket 帧。
+class DemoTiebaApi implements TiebaApi, TiebaChatApi {
   DemoTiebaApi({
     this.loggedIn = true,
     this.latency = const Duration(milliseconds: 120),
@@ -76,6 +80,12 @@ class DemoTiebaApi implements TiebaApi {
   final Set<String> _dislikedPosts = <String>{};
   final Map<String, Set<int>> _pollSelections = <String, Set<int>>{};
   late final Map<String, LikeForumInfo> _likes;
+
+  /// 私信会话按 peer uid 保存在内存里；DemoTiebaApi 实例本身按账号重建，
+  /// 因此不同账号不会共享同一份会话。
+  final Map<String, _DemoChatState> _chatStates = <String, _DemoChatState>{};
+  bool _chatSeeded = false;
+  int _chatMid = 1000;
 
   List<_ThreadSeed>? _recommendSeeds;
 
@@ -1792,6 +1802,263 @@ class DemoTiebaApi implements TiebaApi {
     await _wait();
     _requireLogin();
     _host?.onMessage?.call('设置已保存');
+  }
+
+  // ── 私信 ────────────────────────────────────────────────────────────────
+
+  /// 首次访问私信时铺一组可交互的会话与消息。
+  void _seedChats() {
+    if (_chatSeeded) return;
+    _chatSeeded = true;
+    final DateTime now = DateTime.now();
+
+    void seed(
+        _Persona peer, int unread, bool muted, List<_ChatSeedLine> lines) {
+      final _DemoChatState state = _DemoChatState(
+        peer: peer,
+        unread: unread,
+        muted: muted,
+      );
+      for (final _ChatSeedLine line in lines) {
+        final DateTime time = now.subtract(Duration(minutes: line.minutesAgo));
+        if (line.mine) {
+          final int mid = ++_chatMid;
+          state.messages.add(TiebaChatMessage(
+            id: '$mid',
+            localId: '${mid * 100}',
+            recordId: '${mid * 100}',
+            conversationId: peer.uid,
+            senderUid: _me.uid,
+            content: line.text,
+            time: time,
+            isRead: true,
+          ));
+        } else {
+          final int mid = ++_chatMid;
+          state.messages.add(TiebaChatMessage(
+            id: '$mid',
+            localId: '${mid * 100}',
+            recordId: '${mid * 100}',
+            conversationId: peer.uid,
+            senderUid: peer.uid,
+            content: line.text,
+            time: time,
+            isRead: unread == 0,
+          ));
+        }
+      }
+      _chatStates[peer.uid] = state;
+    }
+
+    seed(_nana, 2, false, <_ChatSeedLine>[
+      const _ChatSeedLine('在吗？', false, 86),
+      const _ChatSeedLine('上次你说的那个帖子，我找不到了 #(笑眼)', false, 85),
+      const _ChatSeedLine('在的', true, 80),
+      const _ChatSeedLine('你说的是哪个吧的？ #(滑稽)', true, 79),
+      const _ChatSeedLine('就是那个讲老式相机的，标题好像有「胶片」两个字', false, 14),
+      const _ChatSeedLine('刚看完那个帖子，笑死 #(笑眼)', false, 8),
+    ]);
+    seed(_lateCat, 2, true, <_ChatSeedLine>[
+      const _ChatSeedLine('明天球场见？', false, 42),
+      const _ChatSeedLine('我带水，你带球', false, 41),
+      const _ChatSeedLine('好，那我先睡了', true, 300),
+    ]);
+    seed(_oldRadio, 0, false, <_ChatSeedLine>[
+      const _ChatSeedLine('那本书我找到了，回头带给你', false, 1440),
+      const _ChatSeedLine('好呀，不急', true, 1435),
+    ]);
+    seed(_southWind, 0, false, <_ChatSeedLine>[
+      const _ChatSeedLine('好久不见，最近怎么样？', false, 2880),
+    ]);
+    seed(_pencilBox, 0, false, <_ChatSeedLine>[
+      const _ChatSeedLine('收到，谢谢！ #(呵呵)', false, 4320),
+    ]);
+  }
+
+  _DemoChatState _ensureChat(String uid) {
+    _seedChats();
+    final _DemoChatState? cached = _chatStates[uid];
+    if (cached != null) return cached;
+    final _DemoChatState created = _DemoChatState(peer: _personaByUid(uid));
+    _chatStates[uid] = created;
+    return created;
+  }
+
+  TiebaConversation _conversationView(_DemoChatState state) {
+    final TiebaChatMessage? last =
+        state.messages.isEmpty ? null : state.messages.last;
+    return TiebaConversation(
+      id: state.peer.uid,
+      peerUid: state.peer.uid,
+      title: state.peer.name,
+      avatar: state.peer.avatar,
+      groupType: 6,
+      lastMessage: last?.content ?? '',
+      lastMessageIsMine: last?.senderUid == _me.uid,
+      lastMessageType: last?.type ?? 1,
+      lastTime: last?.time,
+      unread: state.unread,
+      isMuted: state.muted,
+      isBlocked: state.blocked,
+    );
+  }
+
+  @override
+  Future<List<TiebaConversation>> getConversations() async {
+    await _wait();
+    _requireLogin();
+    _seedChats();
+    final List<_DemoChatState> states = _chatStates.values
+        .where((_DemoChatState state) => state.messages.isNotEmpty)
+        .toList();
+    states.sort((_DemoChatState a, _DemoChatState b) {
+      final DateTime at = a.messages.isEmpty
+          ? DateTime.fromMillisecondsSinceEpoch(0)
+          : a.messages.last.time;
+      final DateTime bt = b.messages.isEmpty
+          ? DateTime.fromMillisecondsSinceEpoch(0)
+          : b.messages.last.time;
+      return bt.compareTo(at);
+    });
+    return <TiebaConversation>[
+      for (final _DemoChatState state in states) _conversationView(state),
+    ];
+  }
+
+  @override
+  Future<ChatMessagePage> getChatMessages(
+    String conversationId, {
+    ChatCursor? cursor,
+    int limit = 30,
+  }) async {
+    await _wait();
+    _requireLogin();
+    final _DemoChatState state = _ensureChat(conversationId);
+    final List<TiebaChatMessage> all = state.messages;
+    int end = all.length;
+    if (cursor != null && !cursor.isEmpty) {
+      final int index = all.indexWhere((TiebaChatMessage message) =>
+          message.id == cursor.beforeId || message.localId == cursor.beforeId);
+      end = index < 0 ? 0 : index;
+    }
+    final int size = limit <= 0 ? 30 : limit;
+    final int start = end - size < 0 ? 0 : end - size;
+    final List<TiebaChatMessage> page = all.sublist(start, end);
+    return ChatMessagePage(
+      messages: page,
+      hasMore: start > 0,
+      nextCursor: start > 0 && page.isNotEmpty
+          ? ChatCursor(
+              beforeId:
+                  page.first.id.isEmpty ? page.first.localId : page.first.id)
+          : null,
+    );
+  }
+
+  @override
+  Future<ChatSendResult> sendChatMessage(
+    String conversationId,
+    ChatDraft draft,
+  ) async {
+    await _wait();
+    _requireLogin();
+    final String text = draft.text.trim();
+    if (text.isEmpty) {
+      throw _error('消息不能为空');
+    }
+    final _DemoChatState state = _ensureChat(conversationId);
+    final String recordId = draft.recordId.isEmpty
+        ? '${DateTime.now().microsecondsSinceEpoch}'
+        : draft.recordId;
+    final DateTime now = DateTime.now();
+    final int mid = ++_chatMid;
+    final TiebaChatMessage sent = TiebaChatMessage(
+      id: '$mid',
+      localId: '${mid * 100}',
+      recordId: recordId,
+      conversationId: conversationId,
+      senderUid: _me.uid,
+      content: text,
+      time: now,
+      type: draft.type,
+      status: TiebaChatMessageStatus.sent,
+      isRead: true,
+    );
+    // 同一个 recordId 重试时替换旧的失败记录，而不是追加第二条。
+    final int existing = state.messages
+        .indexWhere((TiebaChatMessage message) => message.recordId == recordId);
+    if (existing >= 0) {
+      state.messages[existing] = sent;
+    } else {
+      state.messages.add(sent);
+    }
+    return ChatSendResult(message: sent);
+  }
+
+  @override
+  Future<int> getChatUnread() async {
+    await _wait();
+    _requireLogin();
+    _seedChats();
+    return _chatStates.values
+        .fold<int>(0, (int sum, _DemoChatState state) => sum + state.unread);
+  }
+
+  @override
+  Future<void> markChatRead(String conversationId, String lastMessageId) async {
+    await _wait();
+    _requireLogin();
+    final _DemoChatState state = _ensureChat(conversationId);
+    state.unread = 0;
+    for (int i = 0; i < state.messages.length; i++) {
+      final TiebaChatMessage message = state.messages[i];
+      if (message.senderUid != _me.uid && !message.isRead) {
+        state.messages[i] = message.copyWith(isRead: true);
+      }
+    }
+  }
+
+  @override
+  Future<ChatMaskSettings> getChatMask(String conversationId) async {
+    await _wait();
+    _requireLogin();
+    final _DemoChatState state = _ensureChat(conversationId);
+    return ChatMaskSettings(
+      userId: conversationId,
+      muteNotifications: state.muted,
+      blocked: state.blocked,
+      remindMask: state.muted ? 1 : 0,
+      maskedUids: <String>{
+        for (final _DemoChatState item in _chatStates.values)
+          if (item.blocked) item.peer.uid,
+      },
+    );
+  }
+
+  @override
+  Future<void> updateChatMask(ChatMaskSettings settings) async {
+    await _wait();
+    _requireLogin();
+    final _DemoChatState state = _ensureChat(settings.userId);
+    // 屏蔽走 TiebaBlockSettings；IM 设置只负责免打扰。
+    state.muted = settings.muteNotifications;
+  }
+
+  @override
+  Future<TiebaConversation?> getChatPeer(String conversationId) async {
+    await _wait();
+    _requireLogin();
+    _seedChats();
+    final _DemoChatState? state = _chatStates[conversationId];
+    if (state != null) return _conversationView(state);
+    final _Persona peer = _personaByUid(conversationId);
+    return TiebaConversation(
+      id: peer.uid,
+      peerUid: peer.uid,
+      title: peer.name,
+      avatar: peer.avatar,
+      groupType: 6,
+    );
   }
 
   // ── 数据辅助 ────────────────────────────────────────────────────────────
