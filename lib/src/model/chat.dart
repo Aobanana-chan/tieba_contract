@@ -60,7 +60,10 @@ class TiebaConversation {
   /// 不臆造「未读」。
   final bool lastMessageRead;
 
-  /// 最后一条消息类型；首版只渲染 1（文本）。
+  /// 最后一条消息类型（官方 `msgType`）。
+  ///
+  /// 界面按类型渲染摘要：1 文本、2 图片、3 语音、4 大表情、7/35 多图文、
+  /// 22 已读回执（不进入摘要）等。
   final int lastMessageType;
 
   /// 最后消息时间。
@@ -155,7 +158,10 @@ class TiebaChatMessage {
   /// 发送者 uid。
   final String senderUid;
 
-  /// 消息类型，首版只处理文本 `1`。
+  /// 消息类型（官方 `MsgContentType` / `msgType`）。
+  ///
+  /// 常见的 1 文本、2 图片、3 语音、4 大表情、7/35 多图文、22 已读回执等；
+  /// 22 是控制事件，不应出现在聊天正文里。
   final int type;
 
   /// 消息正文。贴吧表情以 `#(…)` token 形式存在于正文里。
