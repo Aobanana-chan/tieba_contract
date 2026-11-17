@@ -12,6 +12,10 @@ class _DemoChatState {
   int unread;
   bool muted;
   bool blocked = false;
+
+  /// 对方已读到的最新 mid；演示后端用它展示「已读 / 未读」。
+  int peerReadMid = 0;
+
   final List<TiebaChatMessage> messages = <TiebaChatMessage>[];
 }
 

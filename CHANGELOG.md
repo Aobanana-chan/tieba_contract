@@ -13,6 +13,8 @@
   IM 免打扰/屏蔽；不改变 `TiebaApi` 的抽象成员。
 - `DemoTiebaApi` 同时实现 `TiebaChatApi`，提供可交互的内存会话、发送失败重试、
   未读与已读状态。
+- `TiebaConversation` 新增可选 `userType` 与 `isReadOnly`：官方账号 3/4 只接收消息，
+  对齐官方隐藏输入栏的行为。
 
 ## 1.1.0
 

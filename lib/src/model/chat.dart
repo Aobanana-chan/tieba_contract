@@ -26,11 +26,13 @@ class TiebaConversation {
     this.avatar = '',
     this.lastMessage = '',
     this.lastMessageIsMine = false,
+    this.lastMessageRead = true,
     this.lastMessageType = 1,
     this.lastTime,
     this.unread = 0,
     this.isMuted = false,
     this.isBlocked = false,
+    this.userType = 0,
   });
 
   /// 会话 id。个人会话里等于对方 uid（协议强推断）。
@@ -51,6 +53,13 @@ class TiebaConversation {
   /// 最后一条消息是否由本人发出（列表摘要加「我：」）。
   final bool lastMessageIsMine;
 
+  /// 本人发出的最后一条消息是否已被对方读到。
+  ///
+  /// 只在 [lastMessageIsMine] 为 true 时有意义；对方发来的消息统一为 true，
+  /// 避免把「他还没读自己的消息」误画成己方未读。无法确认时也按已读处理，
+  /// 不臆造「未读」。
+  final bool lastMessageRead;
+
   /// 最后一条消息类型；首版只渲染 1（文本）。
   final int lastMessageType;
 
@@ -69,8 +78,15 @@ class TiebaConversation {
   /// 是否已屏蔽（只读镜像；以服务端下一次响应为准）。
   final bool isBlocked;
 
+  /// 官方账号类型（IM `UserInfo.userType`）。0 表示未知/普通用户。
+  final int userType;
+
   /// 个人会话。
   bool get isPrivate => groupType == 6;
+
+  /// 官方只读会话：`userType` 3/4 的账号只接收消息，界面不提供输入框。
+  /// 对齐官方 `OfficialBarChatActivity.initView`：3 与 4 都会隐藏底部输入栏。
+  bool get isReadOnly => userType == 3 || userType == 4;
 
   TiebaConversation copyWith({
     String? id,
@@ -79,12 +95,14 @@ class TiebaConversation {
     String? avatar,
     String? lastMessage,
     bool? lastMessageIsMine,
+    bool? lastMessageRead,
     int? lastMessageType,
     DateTime? lastTime,
     int? unread,
     int? groupType,
     bool? isMuted,
     bool? isBlocked,
+    int? userType,
   }) {
     return TiebaConversation(
       id: id ?? this.id,
@@ -93,12 +111,14 @@ class TiebaConversation {
       avatar: avatar ?? this.avatar,
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageIsMine: lastMessageIsMine ?? this.lastMessageIsMine,
+      lastMessageRead: lastMessageRead ?? this.lastMessageRead,
       lastMessageType: lastMessageType ?? this.lastMessageType,
       lastTime: lastTime ?? this.lastTime,
       unread: unread ?? this.unread,
       groupType: groupType ?? this.groupType,
       isMuted: isMuted ?? this.isMuted,
       isBlocked: isBlocked ?? this.isBlocked,
+      userType: userType ?? this.userType,
     );
   }
 }
@@ -147,7 +167,10 @@ class TiebaChatMessage {
   /// 发送状态。
   final TiebaChatMessageStatus status;
 
-  /// 是否已读（只用于本地未读口径，不表示对方已读）。
+  /// 是否已读。
+  ///
+  /// 对方发来的消息：本人是否已经读到；本人发出的消息：对方是否已经读到。
+  /// 己方消息在收到 22 已读回执前保持 false，界面显示「未读」。
   final bool isRead;
 
   /// 语音时长（秒），首版不使用。

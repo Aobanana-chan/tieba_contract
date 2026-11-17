@@ -1812,8 +1812,8 @@ class DemoTiebaApi implements TiebaApi, TiebaChatApi {
     _chatSeeded = true;
     final DateTime now = DateTime.now();
 
-    void seed(
-        _Persona peer, int unread, bool muted, List<_ChatSeedLine> lines) {
+    void seed(_Persona peer, int unread, bool muted, List<_ChatSeedLine> lines,
+        {bool peerReadMine = false}) {
       final _DemoChatState state = _DemoChatState(
         peer: peer,
         unread: unread,
@@ -1831,7 +1831,7 @@ class DemoTiebaApi implements TiebaApi, TiebaChatApi {
             senderUid: _me.uid,
             content: line.text,
             time: time,
-            isRead: true,
+            isRead: false,
           ));
         } else {
           final int mid = ++_chatMid;
@@ -1847,17 +1847,30 @@ class DemoTiebaApi implements TiebaApi, TiebaChatApi {
           ));
         }
       }
+      if (peerReadMine) {
+        for (int i = 0; i < state.messages.length; i++) {
+          final TiebaChatMessage message = state.messages[i];
+          if (message.senderUid != _me.uid) continue;
+          state.peerReadMid = int.tryParse(message.id) ?? state.peerReadMid;
+          state.messages[i] = message.copyWith(isRead: true);
+        }
+      }
       _chatStates[peer.uid] = state;
     }
 
-    seed(_nana, 2, false, <_ChatSeedLine>[
-      const _ChatSeedLine('在吗？', false, 86),
-      const _ChatSeedLine('上次你说的那个帖子，我找不到了 #(笑眼)', false, 85),
-      const _ChatSeedLine('在的', true, 80),
-      const _ChatSeedLine('你说的是哪个吧的？ #(滑稽)', true, 79),
-      const _ChatSeedLine('就是那个讲老式相机的，标题好像有「胶片」两个字', false, 14),
-      const _ChatSeedLine('刚看完那个帖子，笑死 #(笑眼)', false, 8),
-    ]);
+    seed(
+        _nana,
+        2,
+        false,
+        <_ChatSeedLine>[
+          const _ChatSeedLine('在吗？', false, 86),
+          const _ChatSeedLine('上次你说的那个帖子，我找不到了 #(笑眼)', false, 85),
+          const _ChatSeedLine('在的', true, 80),
+          const _ChatSeedLine('你说的是哪个吧的？ #(滑稽)', true, 79),
+          const _ChatSeedLine('就是那个讲老式相机的，标题好像有「胶片」两个字', false, 14),
+          const _ChatSeedLine('刚看完那个帖子，笑死 #(笑眼)', false, 8),
+        ],
+        peerReadMine: true);
     seed(_lateCat, 2, true, <_ChatSeedLine>[
       const _ChatSeedLine('明天球场见？', false, 42),
       const _ChatSeedLine('我带水，你带球', false, 41),
@@ -1873,6 +1886,15 @@ class DemoTiebaApi implements TiebaApi, TiebaChatApi {
     seed(_pencilBox, 0, false, <_ChatSeedLine>[
       const _ChatSeedLine('收到，谢谢！ #(呵呵)', false, 4320),
     ]);
+    // 对方已经读过的己方消息：列表里显示「已读」。
+    seed(
+        _fries,
+        0,
+        false,
+        <_ChatSeedLine>[
+          const _ChatSeedLine('那家店我去了，确实不错', true, 2880),
+        ],
+        peerReadMine: true);
   }
 
   _DemoChatState _ensureChat(String uid) {
@@ -1887,6 +1909,7 @@ class DemoTiebaApi implements TiebaApi, TiebaChatApi {
   TiebaConversation _conversationView(_DemoChatState state) {
     final TiebaChatMessage? last =
         state.messages.isEmpty ? null : state.messages.last;
+    final bool lastIsMine = last?.senderUid == _me.uid;
     return TiebaConversation(
       id: state.peer.uid,
       peerUid: state.peer.uid,
@@ -1894,7 +1917,8 @@ class DemoTiebaApi implements TiebaApi, TiebaChatApi {
       avatar: state.peer.avatar,
       groupType: 6,
       lastMessage: last?.content ?? '',
-      lastMessageIsMine: last?.senderUid == _me.uid,
+      lastMessageIsMine: lastIsMine,
+      lastMessageRead: last == null ? true : (lastIsMine ? last.isRead : true),
       lastMessageType: last?.type ?? 1,
       lastTime: last?.time,
       unread: state.unread,
@@ -1982,7 +2006,7 @@ class DemoTiebaApi implements TiebaApi, TiebaChatApi {
       time: now,
       type: draft.type,
       status: TiebaChatMessageStatus.sent,
-      isRead: true,
+      isRead: state.peerReadMid >= mid,
     );
     // 同一个 recordId 重试时替换旧的失败记录，而不是追加第二条。
     final int existing = state.messages
