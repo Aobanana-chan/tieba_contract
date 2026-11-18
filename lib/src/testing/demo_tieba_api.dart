@@ -20,7 +20,7 @@ part 'demo_chat.dart';
 ///
 /// 同时实现可选的 [TiebaChatApi]，用内存状态机演示私信会话、发送、
 /// 未读与已读，不模拟真实 socket 帧。
-class DemoTiebaApi implements TiebaApi, TiebaChatApi {
+class DemoTiebaApi implements TiebaApi, TiebaChatApi, TiebaNotificationApi {
   DemoTiebaApi({
     this.loggedIn = true,
     this.latency = const Duration(milliseconds: 120),
@@ -2083,6 +2083,211 @@ class DemoTiebaApi implements TiebaApi, TiebaChatApi {
       avatar: peer.avatar,
       groupType: 6,
     );
+  }
+
+  // ── 通知中心：吧友互助 / 吧广播 ──────────────────────────────────────────
+
+  bool _mutualHelpMasked = false;
+  final bool _broadcastUnread = true;
+
+  @override
+  Future<TiebaNotificationOverview> getNotificationOverview() async {
+    await _wait();
+    if (!loggedIn) return TiebaNotificationOverview.empty;
+    final DateTime now = DateTime.now();
+    return TiebaNotificationOverview(
+      mutualHelp: TiebaMutualHelpNotice(
+        visible: true,
+        unread: 3,
+        latestTime: now.subtract(const Duration(minutes: 16)),
+        masked: _mutualHelpMasked,
+      ),
+      broadcast: TiebaBroadcastNotice(
+        unread: _broadcastUnread,
+        latestTime: now.subtract(const Duration(minutes: 16)),
+        title: '期末考试安排已发布，请提前查看考场',
+        summary: '本学期期末考试将于 7 月 8 日开始，具体考场安排请查看附件。',
+      ),
+    );
+  }
+
+  @override
+  Future<bool> getMutualHelpMasked() async {
+    await _wait();
+    return _mutualHelpMasked;
+  }
+
+  @override
+  Future<void> setMutualHelpMasked(bool masked) async {
+    await _wait();
+    _requireLogin();
+    _mutualHelpMasked = masked;
+  }
+
+  @override
+  Future<TiebaBroadcastPage> getBroadcastHistory({
+    required String forumId,
+    int cursor = 0,
+    int count = 15,
+  }) async {
+    await _wait();
+    _requireLogin();
+    final List<TiebaBroadcastItem> all = _demoBroadcasts(forumId);
+    final int start = cursor <= 0
+        ? 0
+        : all.indexWhere((TiebaBroadcastItem item) => item.id == '$cursor') + 1;
+    final int from = start <= 0 ? 0 : start;
+    final List<TiebaBroadcastItem> page =
+        all.skip(from).take(count <= 0 ? 15 : count).toList(growable: false);
+    final int next = page.isEmpty ? 0 : (int.tryParse(page.last.id) ?? 0);
+    return TiebaBroadcastPage(
+      items: page,
+      hasMore: from + page.length < all.length,
+      nextCursor: next,
+    );
+  }
+
+  @override
+  Future<List<TiebaBroadcastItem>> getBroadcastFeed({int limit = 80}) async {
+    await _wait();
+    if (!loggedIn) return const <TiebaBroadcastItem>[];
+    final DateTime now = DateTime.now();
+    final List<_ForumSeed> forums = _forums.take(3).toList(growable: false);
+    final List<TiebaBroadcastItem> items = <TiebaBroadcastItem>[
+      TiebaBroadcastItem(
+        id: '910000000000000001',
+        title: '今天的晚霞好像被打翻了',
+        content: '从图书馆出来刚好赶上，整片天都是橘红色的。手机拍不出十分之一，但还是想留一张。',
+        picUrl: 'https://picsum.photos/seed/tieba-broadcast-sunset/240/180',
+        publishTime: now.subtract(const Duration(minutes: 36)),
+        commentCount: 153,
+        likeCount: 247,
+        shareCount: 7,
+        threadId: '8301124590',
+        forumId: forums[0].fid,
+        forumName: forums[0].name,
+        forumAvatar: forums[0].avatar,
+      ),
+      TiebaBroadcastItem(
+        id: '910000000000000002',
+        title: '整理了一份新手向的入坑顺序',
+        content: '先把基础操作过一遍，再按兴趣挑两三个方向练手。不要一开始就把所有装备都买齐，真的用不上。',
+        publishTime: now.subtract(const Duration(hours: 2)),
+        commentCount: 312,
+        likeCount: 1003,
+        shareCount: 21,
+        threadId: '8324419027',
+        forumId: forums[1].fid,
+        forumName: forums[1].name,
+        forumAvatar: forums[1].avatar,
+      ),
+      TiebaBroadcastItem(
+        id: '910000000000000003',
+        title: '周末球场有人来吗',
+        content: '下午三点老地方，缺两个人。水平不限，主要想凑个整场。',
+        picUrl: 'https://picsum.photos/seed/tieba-broadcast-ball/240/180',
+        publishTime: now.subtract(const Duration(hours: 5)),
+        commentCount: 184,
+        likeCount: 413,
+        shareCount: 0,
+        forumId: forums[2].fid,
+        forumName: forums[2].name,
+        forumAvatar: forums[2].avatar,
+      ),
+      TiebaBroadcastItem(
+        id: '910000000000000004',
+        title: '关于吧规更新的一点说明',
+        content: '即日起禁止发布账号交易、代练与广告引流信息。违规内容会直接删除，情节严重者封禁处理。',
+        publishTime: now.subtract(const Duration(days: 1, hours: 3)),
+        commentCount: 267,
+        likeCount: 3886,
+        shareCount: 10,
+        threadId: '8334012580',
+        forumId: forums[0].fid,
+        forumName: forums[0].name,
+        forumAvatar: forums[0].avatar,
+      ),
+      TiebaBroadcastItem(
+        id: '910000000000000005',
+        title: '新版本体验反馈集中帖',
+        content: '更新后遇到问题可以先在这里回帖，尽量带上机型和复现步骤，方便统一排查。',
+        publishTime: now.subtract(const Duration(days: 1, hours: 9)),
+        commentCount: 62,
+        likeCount: 239,
+        shareCount: 1,
+        forumId: forums[1].fid,
+        forumName: forums[1].name,
+        forumAvatar: forums[1].avatar,
+      ),
+      TiebaBroadcastItem(
+        id: '910000000000000006',
+        title: '这周的吧友作品合集',
+        content: '挑了十几张最近的投稿，风景、人像和静物都有。已征得作者同意，转载请注明出处。',
+        picUrl: 'https://picsum.photos/seed/tieba-broadcast-photo/240/180',
+        publishTime: now.subtract(const Duration(days: 2, hours: 4)),
+        commentCount: 67,
+        likeCount: 2536,
+        shareCount: 14,
+        threadId: '8347721055',
+        forumId: forums[2].fid,
+        forumName: forums[2].name,
+        forumAvatar: forums[2].avatar,
+      ),
+    ];
+    return items.take(limit <= 0 ? 80 : limit).toList(growable: false);
+  }
+
+  @override
+  Future<Map<String, int>> refreshBroadcastPv({
+    required String forumId,
+    required List<String> bcastIds,
+  }) async {
+    await _wait();
+    return <String, int>{
+      for (final String id in bcastIds) id: 1000 + _stableHash(id) % 4000,
+    };
+  }
+
+  @override
+  Future<TiebaBroadcastQuota?> getBroadcastQuota(String forumId) async {
+    await _wait();
+    if (!loggedIn) return null;
+    return const TiebaBroadcastQuota(used: 3, total: 5);
+  }
+
+  List<TiebaBroadcastItem> _demoBroadcasts(String forumId) {
+    final DateTime now = DateTime.now();
+    return <TiebaBroadcastItem>[
+      TiebaBroadcastItem(
+        id: '900000000000000001',
+        title: '关于期末考试安排的通知',
+        content: '本学期期末考试将于 7 月 8 日开始，具体考场安排请查看附件。请同学们提前 15 分钟到场，携带学生证。',
+        publishTime: now.subtract(const Duration(days: 2)),
+        pushUserCount: 12480,
+        pv: 3041,
+        threadId: '8301124590',
+        forumId: forumId,
+      ),
+      TiebaBroadcastItem(
+        id: '900000000000000002',
+        title: '吧规更新：禁止发布交易信息',
+        content:
+            '即日起，本吧禁止发布任何形式的账号交易、代练、广告与引流信息。违规内容将直接删除，并视情节给予封禁处理；屡次违规者加重处罚。',
+        publishTime: now.subtract(const Duration(days: 4)),
+        pushUserCount: 12480,
+        pv: 1926,
+        forumId: forumId,
+      ),
+      TiebaBroadcastItem(
+        id: '900000000000000003',
+        title: '吧头像已更新',
+        content: '吧头像已更新，欢迎回来看看。',
+        publishTime: now.subtract(const Duration(days: 6)),
+        pushUserCount: 9310,
+        pv: 842,
+        forumId: forumId,
+      ),
+    ];
   }
 
   // ── 数据辅助 ────────────────────────────────────────────────────────────

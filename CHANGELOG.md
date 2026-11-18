@@ -15,6 +15,15 @@
   未读与已读状态。
 - `TiebaConversation` 新增可选 `userType` 与 `isReadOnly`：官方账号 3/4 只接收消息，
   对齐官方隐藏输入栏的行为。
+- 新增通知中心模型：`TiebaNotificationOverview`、`TiebaMutualHelpNotice`、
+  `TiebaBroadcastNotice`、`TiebaBroadcastItem`、`TiebaBroadcastPage` 与
+  `TiebaBroadcastQuota`。
+- 新增可选接口 `TiebaNotificationApi`：通知概览、互助屏蔽开关
+  （`switch_type=45`）、按吧广播历史、广播聚合流、广播阅读数刷新与发布额度；
+  不改变 `TiebaApi` 的抽象成员。
+- `TiebaBroadcastItem` 增加评论 / 点赞 / 分享数，供吧广播聚合流展示。
+- `DemoTiebaApi` 同时实现 `TiebaNotificationApi`，提供演示用的互助未读、
+  广播红点、历史列表、跨吧聚合流与本月配额。
 
 ## 1.1.0
 
